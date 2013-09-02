@@ -1,4 +1,4 @@
-rAthena with inflation
+NPC shop with inflation
 =======
 * rAthena Forums
 	http://rathena.org/
