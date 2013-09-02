@@ -63,6 +63,10 @@ struct skill_tree_entry skill_tree[CLASS_COUNT][MAX_SKILL_TREE];
 int day_timer_tid;
 int night_timer_tid;
 
+#ifdef RENEWAL_INFLATION
+int inflation_timer_tid;
+#endif
+
 struct fame_list smith_fame_list[MAX_FAME_LIST];
 struct fame_list chemist_fame_list[MAX_FAME_LIST];
 struct fame_list taekwon_fame_list[MAX_FAME_LIST];
@@ -3675,6 +3679,27 @@ int pc_insert_card(struct map_session_data* sd, int idx_card, int idx_equip)
 /*==========================================
  * Update buying value by skills
  *------------------------------------------*/
+#ifdef RENEWAL_INFLATION
+
+double pc_modifybuyvalue(struct map_session_data *sd,double orig_value)
+{
+	int skill,rate1 = 0,rate2 = 0;
+	double val = orig_value;
+	if((skill=pc_checkskill(sd,MC_DISCOUNT))>0)	// merchant discount
+		rate1 = 5+skill*2-((skill==10)? 1:0);
+	if((skill=pc_checkskill(sd,RG_COMPULSION))>0)	 // rogue discount
+		rate2 = 5+skill*4;
+	if(rate1 < rate2) rate1 = rate2;
+	if(rate1)
+		val = orig_value*(double)(100-rate1)/100.;
+	if(val < 0) val = 0;
+	if(orig_value > 0 && val < 1) val = 1;
+
+	return val;
+}
+
+#else
+
 int pc_modifybuyvalue(struct map_session_data *sd,int orig_value)
 {
 	int skill,val = orig_value,rate1 = 0,rate2 = 0;
@@ -3691,9 +3716,29 @@ int pc_modifybuyvalue(struct map_session_data *sd,int orig_value)
 	return val;
 }
 
+#endif
+
 /*==========================================
  * Update selling value by skills
  *------------------------------------------*/
+#ifdef RENEWAL_INFLATION
+
+double pc_modifysellvalue(struct map_session_data *sd,double orig_value)
+{
+	int skill,rate = 0;
+	double val = orig_value;
+	if((skill=pc_checkskill(sd,MC_OVERCHARGE))>0)	//OverCharge
+		rate = 5+skill*2-((skill==10)? 1:0);
+	if(rate)
+		val = orig_value*(double)(100+rate)/100.;
+	if(val < 0) val = 0;
+	if(orig_value > 0 && val < 1) val = 1;
+
+	return val;
+}
+
+#else
+
 int pc_modifysellvalue(struct map_session_data *sd,int orig_value)
 {
 	int skill,val = orig_value,rate = 0;
@@ -3706,6 +3751,8 @@ int pc_modifysellvalue(struct map_session_data *sd,int orig_value)
 
 	return val;
 }
+
+#endif
 
 /*==========================================
  * Checking if we have enough place on inventory for new item
@@ -9394,6 +9441,20 @@ int map_night_timer(int tid, unsigned int tick, int id, intptr_t data)
 	return 0;
 }
 
+#ifdef RENEWAL_INFLATION
+/*================================================
+ * timer to do the inflation recover
+ *------------------------------------------------*/
+int map_inflation_timer(int tid, unsigned int tick, int id, intptr_t data)
+{
+	if (battle_config.inflation_recover_duration <= 0)	// if we want an inflation recover
+		return 0;
+
+	itemdb_inflation_recover();
+	return 0;
+}
+#endif
+
 void pc_setstand(struct map_session_data *sd){
 	nullpo_retv(sd);
 
@@ -10234,6 +10295,17 @@ int do_init_pc(void) {
 		day_timer_tid   = add_timer_interval(gettick() + (night_flag ? 0 : day_duration) + night_duration, map_day_timer,   0, 0, day_duration + night_duration);
 		night_timer_tid = add_timer_interval(gettick() + day_duration + (night_flag ? night_duration : 0), map_night_timer, 0, 0, day_duration + night_duration);
 	}
+
+#ifdef RENEWAL_INFLATION
+	if (battle_config.inflation_recover_duration > 0) {
+		int inflation_recover_duration = battle_config.inflation_recover_duration;
+
+		// add inflation recover timer
+		add_timer_func_list(map_inflation_timer, "map_inflation_timer");
+
+		inflation_timer_tid   = add_timer_interval(gettick() + inflation_recover_duration, map_inflation_timer,   0, 0, inflation_recover_duration);
+	}
+#endif
 
 	do_init_pc_groups();
 

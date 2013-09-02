@@ -22,6 +22,12 @@
 /// leave this line to enable renewal specific support such as renewal formulas
 #define RENEWAL
 
+/// game inflation mode
+/// (disable by commenting the line)
+///
+/// leave this line to enable inflation specific support
+#define RENEWAL_INFLATION
+
 /// renewal cast time
 /// (disable by commenting the line)
 ///

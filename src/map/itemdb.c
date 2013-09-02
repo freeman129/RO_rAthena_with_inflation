@@ -1018,6 +1018,18 @@ static bool itemdb_parse_dbrow(char** str, const char* source, int line, int scr
 
 	//When a particular price is not given, we should base it off the other one
 	//(it is important to make a distinction between 'no price' and 0z)
+
+#ifdef RENEWAL_INFLATION
+	if ( str[4][0] )
+		id->value_buy = atof(str[4]);
+	else
+		id->value_buy = atof(str[5]) * 2;
+
+	if ( str[5][0] )
+		id->value_sell = atof(str[5]);
+	else
+		id->value_sell = id->value_buy / 2;
+#else
 	if ( str[4][0] )
 		id->value_buy = atoi(str[4]);
 	else
@@ -1027,6 +1039,8 @@ static bool itemdb_parse_dbrow(char** str, const char* source, int line, int scr
 		id->value_sell = atoi(str[5]);
 	else
 		id->value_sell = id->value_buy / 2;
+#endif
+
 	/*
 	if ( !str[4][0] && !str[5][0])
 	{
@@ -1098,6 +1112,101 @@ static bool itemdb_parse_dbrow(char** str, const char* source, int line, int scr
 		id->equip_script = parse_script(str[20], source, line, scriptopt);
 	if (*str[21])
 		id->unequip_script = parse_script(str[21], source, line, scriptopt);
+
+#ifdef RENEWAL_INFLATION
+
+	if (atoi(str[22]))
+		id->origin_value_buy = atoi(str[22]);
+	else
+		id->origin_value_buy = (int)id->value_buy;
+
+	if (atoi(str[24]))
+		id->buy_sell = atoi(str[24]);
+	else
+		id->buy_sell = 0;
+
+	id->inflation = atoi(str[23]);
+
+	switch(id->type) {  
+		case 0: 
+			if(id->inflation != INFLATION_USABLE_HEALING)
+			{
+				id->inflation = INFLATION_USABLE_HEALING;
+				id->buy_sell = 0;
+			}
+			break;
+		case 2: 
+			if(id->inflation != INFLATION_USABLE_OTHER)
+			{
+				id->inflation = INFLATION_USABLE_OTHER;
+				id->buy_sell = 0;
+			}
+			break;
+		case 3: 
+			if(id->inflation != INFLATION_MISC)
+			{
+				id->inflation = INFLATION_MISC;
+				id->buy_sell = 0;
+			}
+			break;
+		case 4: 
+			if(id->inflation != INFLATION_WEAPON)
+			{
+				id->inflation = INFLATION_WEAPON;
+				id->buy_sell = 0;
+			}
+			break;
+		case 5: 
+			if(id->inflation != INFLATION_ARMOR)
+			{
+				id->inflation = INFLATION_ARMOR;
+				id->buy_sell = 0;
+			}
+			break;
+		case 6: 
+			if(id->inflation != INFLATION_CARD)
+			{
+				id->inflation = INFLATION_CARD;
+				id->buy_sell = 0;
+			}
+			break;
+		case 7: 
+			if(id->inflation != INFLATION_PET_EGG)
+			{
+				id->inflation = INFLATION_PET_EGG;
+				id->buy_sell = 0;
+			}
+			break;
+		case 8: 
+			if(id->inflation != INFLATION_PET_EQUIPMENT)
+			{
+				id->inflation = INFLATION_PET_EQUIPMENT;
+				id->buy_sell = 0;
+			}
+			break;
+		case 10: 
+			if(id->inflation != INFLATION_AMMUNITION)
+			{
+				id->inflation = INFLATION_AMMUNITION;
+				id->buy_sell = 0;
+			}
+			break;
+		case 11: 
+			if(id->inflation != INFLATION_USABLE_DELAY)
+			{
+				id->inflation = INFLATION_USABLE_DELAY;
+				id->buy_sell = 0;
+			}
+			break;
+		default: 
+			if(id->inflation != INFLATION_DEFAULT)
+			{
+				id->inflation = INFLATION_DEFAULT;
+				id->buy_sell = 0;
+			}
+	}
+
+#endif
 
 	return true;
 }
@@ -1236,12 +1345,21 @@ static int itemdb_readdb(void)
 static int itemdb_read_sqldb(void) {
 
 	const char* item_db_name[] = {
-								#ifdef RENEWAL
-									item_db_re_db,
-								#else
-									item_db_db,
-								#endif
-									item_db2_db };
+						#ifdef RENEWAL 
+							#ifdef RENEWAL_INFLATION
+								item_db_re_inflation_db,
+							#else
+								item_db_re_db,
+							#endif
+						#else
+							item_db_db,
+						#endif
+						#ifdef RENEWAL_INFLATION
+							item_db2_inflation_db,
+						#else
+							item_db2_db
+						#endif
+					 };
 	int fi;
 
 	for( fi = 0; fi < ARRAYLENGTH(item_db_name); ++fi ) {
@@ -1255,11 +1373,11 @@ static int itemdb_read_sqldb(void) {
 
 		// process rows one by one
 		while( SQL_SUCCESS == Sql_NextRow(mmysql_handle) ) {// wrap the result into a TXT-compatible format
-			char* str[22];
+			char* str[ITEMDB_ENTRY];
 			char* dummy = "";
 			int i;
 			++lines;
-			for( i = 0; i < 22; ++i ) {
+			for( i = 0; i < ITEMDB_ENTRY; ++i ) {
 				Sql_GetData(mmysql_handle, i, &str[i], NULL);
 				if( str[i] == NULL )
 					str[i] = dummy; // get rid of NULL columns
@@ -1365,6 +1483,215 @@ static void itemdb_read(void) {
 
 	itemdb_uid_load();
 }
+
+#ifdef RENEWAL_INFLATION
+
+/*======================================================================================
+ * Calculate inflation of arithmetic progression when buy/sell numerous items one-time.
+ *--------------------------------------------------------------------------------------*/
+double itemdb_inflation_arithmetic_progression(int nameid, int amount, int buyorsell)
+{
+	int inflation = itemdb_inflation(nameid);
+	int origin_price = itemdb_origin_value_buy(nameid);
+
+	int buy_sell = itemdb_buy_sell(nameid);
+	double inflation_ap = 0.0;
+
+	if(inflation != 0)
+	{
+		double base_inflation = 1.0 / (double)inflation;
+		if(buyorsell)
+		{
+		
+			int up_inflation = inflation * INFLATION_LIMIT_INCREASE;
+
+			if(up_inflation >= (buy_sell + amount))
+				inflation_ap = (double)origin_price * base_inflation * (double)(amount - 1) * (double)amount / 2.0;
+			else if(up_inflation > buy_sell)
+			{
+				int interval = up_inflation - buy_sell;
+				inflation_ap = (double)origin_price * base_inflation * (double)(interval - 1) * (double)interval / 2.0;
+				inflation_ap += (double)origin_price * base_inflation * (double)(interval - 1) * (double)(amount - interval);
+				//printf("Interval=%d\n",interval);
+			}
+		}
+		else
+		{
+			int low_inflation = inflation * INFLATION_LIMIT_DECREASE;
+
+			if(low_inflation <= (buy_sell - amount))
+				inflation_ap = (double)origin_price * base_inflation * (double)(amount - 1) * (double)amount / 2.0;
+			else if(low_inflation < buy_sell)
+			{
+				int interval = abs(buy_sell - low_inflation);
+				inflation_ap = (double)origin_price * base_inflation * (double)(interval - 1) * (double)interval / 2.0;
+				inflation_ap += (double)origin_price * base_inflation * (double)(interval - 1) * (double)(amount - interval);
+				//printf("Interval=%d\n",interval);
+			}
+
+			inflation_ap = inflation_ap / 2.0;
+		}
+	}
+
+	//printf("Inflation_ap=%f\n",inflation_ap);
+
+	if((inflation_ap - (double)((int)inflation_ap)) >= 0.5)
+		inflation_ap += 1.0;
+
+	return inflation_ap;
+}
+
+/*==========================
+ * Update item's inflation
+ *--------------------------*/
+int itemdb_inflation_update(unsigned short* item_list, int n, int buyorsell)
+{
+	int i = 0;
+	int nameid = 0;
+	int amount = 0;
+
+	if(buyorsell)
+	{
+		for( i = 0; i < n; ++i )
+		{
+			nameid = item_list[i*2+1];
+			amount = item_list[i*2+0];
+
+			struct item_data* id = itemdb_search(nameid);
+			int old_buy_sell = id->buy_sell;
+			int up_inflation = id->inflation * INFLATION_LIMIT_INCREASE;
+
+			if(id->inflation != 0)
+			{ 
+				if((id->buy_sell + amount) <= up_inflation)
+					id->buy_sell = id->buy_sell + amount;
+				else 
+					id->buy_sell = up_inflation;
+
+				id->value_buy += (double)id->origin_value_buy * (double)(id->buy_sell - old_buy_sell) / (double)id->inflation;
+
+				id->value_sell = id->value_buy / 2;
+			}
+			//printf("Item_id:%d's price change to %f(value_buy).\n",nameid,id->value_buy);
+		}
+	}
+	else
+	{
+		for( i = 0; i < n; ++i )
+		{
+			nameid = item_list[i*2+0];
+			amount = item_list[i*2+1];
+
+			struct item_data* id = itemdb_search(nameid);
+			int old_buy_sell = id->buy_sell;
+			int low_inflation = id->inflation * INFLATION_LIMIT_DECREASE;
+
+			if(id->inflation != 0)
+			{ 
+				if((id->buy_sell - amount) >= low_inflation)
+					id->buy_sell = id->buy_sell - amount;
+				else
+					id->buy_sell = low_inflation;
+
+				id->value_buy += (double)id->origin_value_buy * (double)(id->buy_sell - old_buy_sell) / (double)id->inflation;
+
+				id->value_sell = id->value_buy / 2;
+			}
+			//printf("Item_id:%d's price change to %f(value_buy).\n",nameid,id->value_buy);
+		}
+	}
+	return 0;
+}
+
+/*======================================
+ * item_inflation_db table writing(not yet)
+ *======================================*/
+static int item_inflation_db_write_sqldb(void) {
+
+	const char* item_db_name[] = {
+							item_db_re_inflation_db,
+
+							item_db2_inflation_db
+					 };
+
+	uint32 count = 0;
+	int i;
+
+	for( i = 0; i < ARRAYLENGTH(itemdb_array); ++i )
+	{
+		if( itemdb_array[i] )
+		{
+			struct item_data* id = itemdb_array[i];
+			// update the item database
+			if( SQL_ERROR == Sql_Query(mmysql_handle, "UPDATE `%s` SET `price_buy`='%f' , `price_sell`='%f' , `origin_value_buy`='%d', `inflation`='%d', `buy_sell`='%d' WHERE `id`='%d'", item_db_name[0], id->value_buy, id->value_sell, id->origin_value_buy, id->inflation, id->buy_sell, id->nameid) )
+			{
+				if( SQL_ERROR == Sql_Query(mmysql_handle, "UPDATE `%s` SET `price_buy`='%f' , `price_sell`='%f' , `origin_value_buy`='%d', `inflation`='%d', `buy_sell`='%d' WHERE `id`='%d'", item_db_name[1], id->value_buy, id->value_sell, id->origin_value_buy, id->inflation, id->buy_sell, id->nameid) )
+				{
+					Sql_ShowDebug(mmysql_handle);
+					continue;
+				}
+			}
+			++count;
+		}
+	}
+
+		// free the query result
+		Sql_FreeResult(mmysql_handle);
+
+		ShowStatus("Update item_inflation DB: %lu items. \n", count);
+
+
+	return 0;
+}
+/*==========================================
+ * Auto-recover inflation price
+ *------------------------------------------*/
+void itemdb_inflation_recover(void)
+{
+		int i;
+		int recover_number;
+		int old_buy_sell;
+
+	for( i = 0; i < ARRAYLENGTH(itemdb_array); ++i )
+	{
+		if( itemdb_array[i] && itemdb_array[i]->buy_sell != 0)
+		{
+			struct item_data* id = itemdb_array[i];
+			// recover the item database
+			recover_number = (int)(INFLATION_RECOVER * id->inflation);
+			old_buy_sell = id->buy_sell;
+
+			if(id->inflation != 0)
+			{
+				if(id->buy_sell > 0)
+				{
+					if(id->buy_sell >= recover_number)
+						id->buy_sell -= recover_number;
+					else
+						id->buy_sell = 0;
+
+					id->value_buy += (double)id->origin_value_buy * (double)(id->buy_sell - old_buy_sell) / (double)id->inflation;
+
+					id->value_sell = id->value_buy / 2;
+				}
+				else
+				{
+					if(id->buy_sell <= (0 - recover_number))
+						id->buy_sell += recover_number;
+					else
+						id->buy_sell = 0;
+
+					id->value_buy += (double)id->origin_value_buy * (double)(id->buy_sell - old_buy_sell) / (double)id->inflation;
+
+					id->value_sell = id->value_buy / 2;
+				}
+			}
+			//printf("id=%d , buy_sell = %d\n",id->nameid,id->buy_sell);
+		}
+	}
+}
+
+#endif
 
 /*==========================================
  * Initialize / Finalize
@@ -1486,6 +1813,10 @@ void itemdb_reload(void)
 void do_final_itemdb(void)
 {
 	int i;
+
+#ifdef RENEWAL_INFLATION
+	item_inflation_db_write_sqldb();
+#endif
 
 	for( i = 0; i < ARRAYLENGTH(itemdb_array); ++i )
 		if( itemdb_array[i] )

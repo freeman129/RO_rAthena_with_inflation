@@ -20,7 +20,14 @@ struct npc_label_list {
 	int pos;
 };
 struct npc_item_list {
-	unsigned int nameid,value;
+	unsigned int nameid;
+
+#ifdef RENEWAL_INFLATION
+	double value;
+#else
+	unsigned int value;
+#endif
+
 };
 
 struct npc_data {

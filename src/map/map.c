@@ -72,6 +72,8 @@ int db_use_sqldbs = 0;
 char item_db_db[32] = "item_db";
 char item_db2_db[32] = "item_db2";
 char item_db_re_db[32] = "item_db_re";
+char item_db_re_inflation_db[32] = "item_db_re_inflation";
+char item_db2_inflation_db[32] = "item_db2_inflation";
 char item_cash_db_db[32] = "item_cash_db";
 char item_cash_db2_db[32] = "item_cash_db2";
 char mob_db_db[32] = "mob_db";
@@ -3514,6 +3516,12 @@ int inter_config_read(char *cfgName)
 		else
 		if(strcmpi(w1,"item_db2_db")==0)
 			strcpy(item_db2_db,w2);
+		else
+		if(strcmpi(w1,"item_db_re_inflation_db")==0)
+			strcpy(item_db_re_inflation_db,w2);
+		else
+		if(strcmpi(w1,"item_db2_inflation_db")==0)
+			strcpy(item_db2_inflation_db,w2);
 		else
 		if(strcmpi(w1,"item_db_re_db")==0)
 			strcpy(item_db_re_db,w2);

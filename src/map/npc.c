@@ -1508,7 +1508,13 @@ int npc_buylist(struct map_session_data* sd, int n, unsigned short* item_list)
 	// process entries in buy list, one by one
 	for( i = 0; i < n; ++i )
 	{
-		int nameid, amount, value;
+		int nameid, amount;
+
+#ifdef RENEWAL_INFLATION
+		double value;
+#else
+		int value;
+#endif
 
 		// find this entry in the shop's sell list
 		ARR_FIND( 0, nd->u.shop.count, j,
@@ -1553,7 +1559,13 @@ int npc_buylist(struct map_session_data* sd, int n, unsigned short* item_list)
 
 		value = pc_modifybuyvalue(sd,value);
 
+#ifdef RENEWAL_INFLATION
+		z += value * amount;
+		z += itemdb_inflation_arithmetic_progression(nameid, amount, INFLATION_BUY);
+#else
 		z += (double)value * amount;
+#endif
+
 		w += itemdb_weight(nameid) * amount;
 	}
 
@@ -1568,6 +1580,11 @@ int npc_buylist(struct map_session_data* sd, int n, unsigned short* item_list)
 		return 3;	// Not enough space to store items
 
 	pc_payzeny(sd,(int)z,LOG_TYPE_NPC, NULL);
+
+#ifdef RENEWAL_INFLATION
+	if(itemdb_inflation_update(item_list, n, INFLATION_BUY))
+		printf("Inflation update error\n");
+#endif
 
 	for( i = 0; i < n; ++i )
 	{
@@ -1670,6 +1687,13 @@ int npc_selllist(struct map_session_data* sd, int n, unsigned short* item_list)
 {
 	double z;
 	int i,skill;
+
+#ifdef RENEWAL_INFLATION
+	int n_minus = 0;	// calculate sum of weapons or armors.
+	unsigned short *item_list_inflation;
+	CREATE(item_list_inflation, unsigned short, n*2);
+#endif
+
 	struct npc_data *nd;
 
 	nullpo_retr(1, sd);
@@ -1685,7 +1709,14 @@ int npc_selllist(struct map_session_data* sd, int n, unsigned short* item_list)
 	// verify the sell list
 	for( i = 0; i < n; i++ )
 	{
-		int nameid, amount, idx, value;
+		int nameid, amount, idx;
+
+#ifdef RENEWAL_INFLATION
+		double value;
+		int c;
+#else
+		int value;
+#endif
 
 		idx    = item_list[i*2]-2;
 		amount = item_list[i*2+1];
@@ -1696,6 +1727,24 @@ int npc_selllist(struct map_session_data* sd, int n, unsigned short* item_list)
 		}
 
 		nameid = sd->status.inventory[idx].nameid;
+
+#ifdef RENEWAL_INFLATION
+
+		for(c = 0; c <= i; c++)
+		{
+			if(item_list_inflation[c*2+0] == nameid)
+			{
+				item_list_inflation[c*2+1] += amount;
+				n_minus++;
+				break;
+			}
+			if(c == i)
+			{
+				item_list_inflation[i*2+0] = nameid;
+				item_list_inflation[i*2+1] = amount;
+			}
+		}
+#endif
 
 		if( !nameid || !sd->inventory_data[idx] || sd->status.inventory[idx].amount < amount )
 		{
@@ -1709,13 +1758,38 @@ int npc_selllist(struct map_session_data* sd, int n, unsigned short* item_list)
 
 		value = pc_modifysellvalue(sd, sd->inventory_data[idx]->value_sell);
 
+#ifdef RENEWAL_INFLATION
+		z += value * amount;
+#else
 		z+= (double)value*amount;
+#endif
+
 	}
+
+#ifdef RENEWAL_INFLATION
+	for( i = 0; i < (n - n_minus); i++ )
+	{
+		int nameid, amount;
+
+		nameid = item_list_inflation[i*2+0];
+		amount = item_list_inflation[i*2+1];
+
+		z -= itemdb_inflation_arithmetic_progression(nameid, amount, INFLATION_SELL);
+	}
+#endif
 
 	if( nd->master_nd )
 	{// Script-controlled shops
 		return npc_selllist_sub(sd, n, item_list, nd->master_nd);
 	}
+
+#ifdef RENEWAL_INFLATION
+	if(itemdb_inflation_update(item_list_inflation, (n - n_minus), INFLATION_SELL))
+		printf("Inflation update error\n");
+
+	aFree(item_list_inflation);
+
+#endif
 
 	// delete items
 	for( i = 0; i < n; i++ )

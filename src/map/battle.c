@@ -7058,6 +7058,9 @@ static const struct _battle_data {
 	{ "item_enabled_npc",                   &battle_config.item_enabled_npc,                1,      0,      1,              },
 	{ "item_flooritem_check",               &battle_config.item_onfloor,                    1,      0,      1,              },
 	{ "bowling_bash_area",                  &battle_config.bowling_bash_area,               0,      0,      20,             },
+#ifdef RENEWAL_INFLATION
+	{ "inflation_recover_duration",         &battle_config.inflation_recover_duration,      0,      0,      INT_MAX,        },
+#endif
 };
 #ifndef STATS_OPT_OUT
 /**
@@ -7257,6 +7260,11 @@ void battle_adjust_conf()
 		battle_config.day_duration = 60000;
 	if (battle_config.night_duration && battle_config.night_duration < 60000) // added by [Yor]
 		battle_config.night_duration = 60000;
+
+#ifdef RENEWAL_INFLATION
+	if (battle_config.inflation_recover_duration && battle_config.inflation_recover_duration < 60000)
+		battle_config.inflation_recover_duration = 60000;
+#endif
 
 #if PACKETVER < 20100427
 	if( battle_config.feature_buying_store ) {

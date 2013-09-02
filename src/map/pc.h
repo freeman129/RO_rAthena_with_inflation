@@ -814,8 +814,13 @@ int pc_insert_card(struct map_session_data *sd,int idx_card,int idx_equip);
 int pc_steal_item(struct map_session_data *sd,struct block_list *bl, uint16 skill_lv);
 int pc_steal_coin(struct map_session_data *sd,struct block_list *bl);
 
+#ifdef RENEWAL_INFLATION
+double pc_modifybuyvalue(struct map_session_data*,double);
+double pc_modifysellvalue(struct map_session_data*,double);
+#else
 int pc_modifybuyvalue(struct map_session_data*,int);
 int pc_modifysellvalue(struct map_session_data*,int);
+#endif
 
 int pc_follow(struct map_session_data*, int); // [MouseJstr]
 int pc_stop_following(struct map_session_data*);
@@ -968,6 +973,12 @@ extern int day_timer_tid;
 extern int night_timer_tid;
 int map_day_timer(int tid, unsigned int tick, int id, intptr_t data); // by [yor]
 int map_night_timer(int tid, unsigned int tick, int id, intptr_t data); // by [yor]
+
+#ifdef RENEWAL_INFLATION
+// timer for inflation recover
+extern int inflation_timer_tid;
+int map_inflation_timer(int tid, unsigned int tick, int id, intptr_t data);
+#endif
 
 // Rental System
 void pc_inventory_rentals(struct map_session_data *sd);

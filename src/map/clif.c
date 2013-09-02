@@ -1768,7 +1768,14 @@ void clif_buylist(struct map_session_data *sd, struct npc_data *nd)
 	for( i = 0; i < nd->u.shop.count; i++ )
 	{
 		struct item_data* id = itemdb_exists(nd->u.shop.shop_item[i].nameid);
+
+#ifdef RENEWAL_INFLATION
+		nd->u.shop.shop_item[i].value = id->value_buy;
+		int val = (int)nd->u.shop.shop_item[i].value;
+#else
 		int val = nd->u.shop.shop_item[i].value;
+#endif
+
 		if( id == NULL )
 			continue;
 		WFIFOL(fd, 4+c*11) = val;

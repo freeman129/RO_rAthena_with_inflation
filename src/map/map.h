@@ -856,6 +856,8 @@ extern Sql* logmysql_handle;
 extern char item_db_db[32];
 extern char item_db2_db[32];
 extern char item_db_re_db[32];
+extern char item_db_re_inflation_db[32];
+extern char item_db2_inflation_db[32];
 extern char mob_db_db[32];
 extern char mob_db2_db[32];
 extern char mob_skill_db_db[32];

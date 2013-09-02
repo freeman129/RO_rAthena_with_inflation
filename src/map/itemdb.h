@@ -21,6 +21,36 @@
 /* maximum amount of items a combo may require */
 #define MAX_ITEMS_PER_COMBO 6
 
+#ifdef RENEWAL_INFLATION
+
+#define INFLATION_LIMIT_INCREASE 1
+#define INFLATION_LIMIT_DECREASE (-0.5)
+
+#define INFLATION_USABLE_HEALING 2500
+#define INFLATION_USABLE_OTHER 1000
+#define INFLATION_MISC 400
+#define INFLATION_WEAPON 100
+#define INFLATION_ARMOR 100
+#define INFLATION_CARD 100
+#define INFLATION_PET_EGG 100
+#define INFLATION_PET_EQUIPMENT 100
+#define INFLATION_AMMUNITION 500000
+#define INFLATION_USABLE_DELAY 1000
+#define INFLATION_DEFAULT 2000
+
+#define INFLATION_RECOVER 0.05
+
+#define ITEMDB_ENTRY 25
+
+#define INFLATION_BUY 1
+#define INFLATION_SELL 0
+
+#else
+
+#define ITEMDB_ENTRY 22
+
+#endif
+
 enum item_itemid {
 	ITEMID_EMPERIUM = 714,
 	ITEMID_YELLOW_GEMSTONE = 715,
@@ -103,8 +133,15 @@ struct item_data {
 	char name[ITEM_NAME_LENGTH],jname[ITEM_NAME_LENGTH];
 
 	//Do not add stuff between value_buy and view_id (see how getiteminfo works)
+
+#ifdef RENEWAL_INFLATION
+	double value_buy;
+	double value_sell;
+#else
 	int value_buy;
 	int value_sell;
+#endif
+
 	int type;
 	int maxchance; //For logs, for external game info, for scripts: Max drop chance of this item (e.g. 0.01% , etc.. if it = 0, then monsters don't drop it, -1 denotes items sold in shops only) [Lupus]
 	int sex;
@@ -159,6 +196,13 @@ struct item_data {
 	/* bugreport:309 */
 	struct item_combo **combos;
 	unsigned char combos_count;
+
+#ifdef RENEWAL_INFLATION
+	int origin_value_buy;
+	int inflation;
+	int buy_sell;
+#endif
+
 };
 
 struct item_group {
@@ -212,6 +256,19 @@ int itemdb_searchrandomid(int flags);
 #define itemdb_value_buy(n) itemdb_search(n)->value_buy
 #define itemdb_value_sell(n) itemdb_search(n)->value_sell
 #define itemdb_canrefine(n) (!itemdb_search(n)->flag.no_refine)
+
+#ifdef RENEWAL_INFLATION
+
+#define itemdb_origin_value_buy(n) itemdb_search(n)->origin_value_buy
+#define itemdb_inflation(n) itemdb_search(n)->inflation
+#define itemdb_buy_sell(n) itemdb_search(n)->buy_sell
+
+double itemdb_inflation_arithmetic_progression(int nameid, int amount, int buyorsell);
+int itemdb_inflation_update(unsigned short* item_list, int n, int buyorsell);
+void itemdb_inflation_recover(void);
+
+#endif
+
 //Item trade restrictions [Skotlex]
 int itemdb_isdropable_sub(struct item_data *, int, int);
 int itemdb_cantrade_sub(struct item_data*, int, int);
